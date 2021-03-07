@@ -1,0 +1,410 @@
+1.modelling_big.py
+这个是从最底层就开始加我的global dictionary，但是模型实在太大了，算bp的时候会out of memory，所以不是很好用
+
+2.modelling.py
+这个是在visual和language的self attention的最后一层加入了global dictionary，然后可以用来pre-training，在tiny setting下效果比原来的那个模型好，但是只是tiny情况而已。
+
+3.73中的lxmert是按照默认代码跑的一组pre-training，跑了20个epoch
+
+4.73中跑一个 lxmert_pretrain.bash的去掉--fromscatch的代码
+name改为了bertlx
+bash run/lxmert_pretrain.bash 0,1,2,3 --multiGPU
+
+5.下了一个fp16版本的代码
+然后把lxmert原来版本的:
+lxmert_data.py保存为了lxmert_data_old.py
+utils.py保存为了utilx_old.py
+lxmert_pretrain.py保存为了lxmert_pretrain_old.py
+然后把这两个文件给换成了lxmert-fp16的文件
+
+6.一些脚本
+python vqa_debug.py --train train,nominival --valid minival --llayers 9 --xlayers 5 --rlayers 5 --loadLXMERTQA snap/pretrained/model --batchSize 32 --optim bert --lr 5e-5 --epochs 4 --tqdm --output snap/vqa/vqa_debug2 --tiny --bert_type ft
+
+python vqa_debug.py --train train,nominival --valid minival --llayers 9 --xlayers 5 --rlayers 5 --loadLXMERTQA snap/pretrain/ftlxmert/Epoch20 --batchSize 32 --optim bert --lr 5e-5 --epochs 4 --tqdm --output snap/vqa/vqa_debug2 --tiny --bert_type ft
+
+python pretrain_debug.py --taskMaskLM --taskObjPredict --taskMatched --taskQA --visualLosses obj,attr,feat --wordMaskRate 0.15 --objMaskRate 0.15 --train mscoco_train,mscoco_nominival,vgnococo --valid mscoco_minival --llayers 9 --xlayers 5 --rlayers 5 --fromScratch --batchSize 32 --optim bert --lr 1e-4 --epochs 20 --tqdm --output snap/pretrain/ftlxmert_debug --bert_type ft --tiny
+
+--taskMaskLM --taskObjPredict --taskMatched --taskQA --visualLosses obj,attr,feat --wordMaskRate 0.15 --objMaskRate 0.15 --train mscoco_train,mscoco_nominival,vgnococo --valid mscoco_minival --llayers 9 --xlayers 5 --rlayers 5 --fromScratch --batchSize 32 --optim bert --lr 1e-4 --epochs 20 --tqdm --output ftsnap/pretrain/ftlxmert_debug2 --bert_type ft --tiny --multiGPU
+
+bash run/vqa_finetune.bash 0 vqa_lxr955
+bash run/vqa_finetuneft.bash 1 vqa19
+bash run/gqa_finetuneft.bash 1 v1
+bash run/vqa_finetuneft.bash 1 v1
+
+bash run/vqa_test.bash 1 be20 --test test --load snap/vqa/bertlx/Epoch20/v1/BEST
+bash run/vqa_test_ft.bash 1 fbe19 --test test --load snap/vqa/fb/Epoch19/0.00001/BEST
+
+bash run/gqa_test.bash 3 be20 --load snap/gqa/bertlx/Epoch20/v1/BEST --test submit --batchSize 1024
+bash run/gqa_test_ft.bash 3 fbe20 --load snap/gqa/fb/Epoch20/v1/BEST --test submit --batchSize 1024
+
+bash run/gqa_test_ft.bash 0 fbe18v3 --load snap/gqa/fb/Epoch18/v3/BEST --test submit --batchSize 512
+bash run/gqa_test_ft.bash 2 fb4/Epoch20/v1 --load snap/gqa/fb4/Epoch20/v1/BEST --test submit --batchSize 512
+
+bash run/nlvr2/nlvr2_test_ft.bash 1 nlvr2_fb18v1 --load /data2/yangxu/lxmert/snap/nlvr2/fb/Epoch18/0.00002/BEST --test test --batchSize 256
+
+7.写一个distributed 版本。失败了
+lxmert_pretrain_dist.py
+
+8.在optimizer中写了一个叫做warmup_stair的版本，在这个版本中，warm up不变，之后是每几个epoch降低一定的lr。
+
+9.vqa_constant.py
+把optimizer换成了warm up constant，然后在第4,6个epoch的时候降低10倍lr
+
+
+10.杨晓峰的docker：
+先用这个命令进入到docker里面去，然后yangxu这个文件夹就挂在了files里面，xiaofengyang01/vl_experiment_01:first这个就是image。
+docker run --gpus all -it -v /home/yangxu/:/files xiaofengyang01/vl_experiment_01:first /bin/bash
+
+11.
+1).新写了个mode叫做ft_same
+这个mode下，不用任何新的attention layer，只是share原来的lmxert layer中的attention layer。
+2).新加了一个parameter，叫做cross_type,当为g2l的时候，是用global的visual info作为local的language info的context，反过来也是
+之前的话是global做global的context。
+
+
+xx.pretraining的结果
+1).网上给的结果，在各个服务器的pretrained/model_LXRT.pth
+
+2).自己没有load bert pretrained model训练到的一个lxmert的结果:
+73的/data2/yangxu/lxmert/snap/pretrain/lxmert/
+
+3).load bert pretrained model训练到的一个lxmert的结果:
+73的/data2/yangxu/lxmert/snap/pretrain/bertlx/
+
+4).自己没有load bert pretrained model训练到的一个ft-lxmert的结果:
+237的/data2/yangxu/lxmert/snap/pretrain/ftlxmert/
+
+5).load bert pretrained model训练到的一个ft-lxmert的结果:
+73的/data2/yangxu/lxmert/snap/pretrain/ftbertlx/
+这个初始lr=5e-5
+
+6).load bert pretrained model训练到的一个ft-lxmert的结果:
+200的/data2/yangxu/lxmert/snap/pretrain/fb2/
+lr=1e-4
+
+7).用bert pretrained paramerters，然后不用qa task，lr=5e-5。
+73的/data2/yangxu/lxmert/snap/pretrain/fb3/
+bash run/ftlxmert_pretrain.bash 0,1,2,3 --multiGPU
+
+8).和ftbertlx一致，但是没有load bert参数，而是from scratch
+212的/home/yangxu/data/lxmert/snap/pretrain/fb4/
+bash run/ftlxmert_pretrain1.bash 0,1,2,3 --multiGPU
+vqa上效果不是很好
+
+
+9).用bert pretrained paramerters，前10个不用qa task，后10个用qa task，lr每次都重新设置。
+200的/data2/yangxu/lxmert/snap/pretrain/fb5/
+bash run/ftlxmert_pretrain.bash 0,1,2,3 --multiGPU
+
+10).和fb4一致，lr为1e-4
+212的/home/yangxu/data/lxmert/snap/pretrain/fb6/
+bash run/ftlxmert_pretrain.bash 0,1,2,3 --multiGPU
+跑了5个epoch，loss下降的很慢，就不想跑了
+
+在跑
+11).fbl 这个是在lxmert上面跑的
+这个没有用bert pretrain parameter，lr=5e-5，bs=256，有qa task
+fblpretrain
+
+12).fbl1 这个是在lxmert上面跑的
+这个没有用bert pretrain parameter，lr=5e-5，bs=256，无qa task
+fblpretrain1
+
+13).fbl2,fbl3 lxmert4
+bs=512, load bert parameter,lr 不一样
+
+14).fbl4,fbl5 lxmert2
+bs=512, scratch,lr 不一样
+
+15).fbl6,fbl7 lxmert3
+bs=256,epoch 不一样
+没跑
+
+16).fb7
+73上跑的，用了pretrain2.py
+
+17).fsb
+212， --bert_type ft_same，用了bert parameter
+
+18).fblcm1
+lxmert, conditional mask (pretrain2), bert_large
+
+19).fsb2
+237， --bert_type ft_same，用了bert parameter, pretrain2
+
+20).fblg2l1
+lxmert, bs=256, cross_type: g2l
+
+21).fsbg2l1
+200, --bert_type ft_same, cross_type: g2l
+
+
+
+11.lxmert有个bug，就是在pretraining的时候，visual那一端没有mask住visual att而是直接用了faster rcnn的对object的预测的分数来作为mask的，
+我新建了一个pretrain2.py,把它改成了
+obj_confs = feat_mask
+attr_confs = feat_mask
+在此之前的pretraining model，都没有修正这个bug。
+同时，在pretrain2.py中，在convert_example_to_features里面加了一个binary随机数(random_index),如果为0就mask住sentence，如果我1就mask住image，然后在mask住image的时候，我就把那些被mask住的visual_attention_mask设为0，这个时候，连visual的feature都看不到.
+
+12.lxmert：
+网上提供的baseline的结果:
+[{"test-dev": {"yes/no": 88.21, "number": 54.96, "other": 63.16, "overall": 72.55}}, 
+{"test-standard": {"yes/no": 88.29, "number": 54.4, "other": 63.17, "overall": 72.63}}]
+
+
+自己拿代码pretrain的baseline结果，没有用bert的pretrain的结果：
+73：vqa_b20
+lxmert/Epoch20
+69.33
+
+vqa_b18
+69.44
+
+网上提供的baseline的结果:
+73：snap/pretrained/model
+70.16
+
+
+
+13.upload到腾讯云上的东西
+
+scp -r -P 5102 /home/yangxu/data/lxmert/snap/pretrain/fsb/Epoch19_LXRT.pth yulei_niu@183.174.228.128:/disks/sdd/yulei_niu/lxmert/fsb/
+
+export PATH=~/anaconda3/bin:$PATH
+source activate
+
+coscmd config -a AKIDOaCZibL3TdYZQ5CiuFJ83llW0UkjgPnv -s 0kETmqedSP9LIzQuAAvgrSYOMLo17737 -b lxmert-1303238127 -r ap-guangzhou
+
+coscmd -b lxmert-1303238127 -r ap-guangzhou upload -r /data2/yangxu/lxmert/data/ lxmert/
+
+
+
+14.results
+
+fb:
+/data2/yangxu/lxmert/snap/vqa/fb/Epoch19/0.00001/
+val: 69.98
+
+[{"test-dev": {"yes/no": 88.12, "number": 53.39, "other": 62.72, "overall": 72.12}}, 
+{"test-standard": {"yes/no": 88.06, "number": 52.52, "other": 62.62, "overall": 72.07}}]
+
+snap/vqa/fb/Epoch19/0.00005/BEST
+69.79
+[{"test-dev": {"yes/no": 88.42, "number": 53.31, "other": 62.53, "overall": 72.15}}, 
+{"test-standard": {"yes/no": 88.29, "number": 52.91, "other": 62.79, "overall": 72.29}}]
+snap/vqa/fb/Epoch19/0.00001/BEST
+69.98
+[{"test-dev": {"yes/no": 88.12, "number": 53.39, "other": 62.72, "overall": 72.12}}]
+
+
+snap/vqa/bertlx/Epoch20/v1/BEST
+be20
+vqa:
+69.52
+[{"test-dev": {"yes/no": 88.25, "number": 53.74, "other": 62.63, "overall": 72.18}}, 
+{"test-standard": {"yes/no": 88.01, "number": 53.25, "other": 62.86, "overall": 72.24}}]
+
+/data2/yangxu/lxmert/snap/vqa/fsb2/Epoch20/0.00004/
+val:70.4
+[{"test-dev": {"yes/no": 88.58, "number": 55.85, "other": 63.18, "overall": 72.81}}, {"test-standard": {"yes/no": 88.6, "number": 55.48, "other": 63.39, "overall": 72.98}}]
+
+fsbe20v5 --test test --load /data2/yangxu/lxmert/snap/vqa/fsb2/Epoch20/0.00005/BEST
+val:70.3
+[{"test-dev": {"yes/no": 88.55, "number": 56.28, "other": 63.24, "overall": 72.88}}, {"test-standard": {"yes/no": 88.69, "number": 55.46, "other": 63.2, "overall": 72.92}}]
+
+gqa:
+snap/gqa/bertlx/Epoch20/v1/BEST
+val: 58.82
+test-dev
+{"Accuracy": 60.37723545426387, "Binary": 77.46018499200223, "Open": 45.299696160574534, "Validity": 96.24720822940611, "Plausibility": 84.56823331866126, "Consistency": 90.28090497186673, "Distribution": 5.6356022658804}
+
+snap/gqa/fb/Epoch20/v1/BEST
+val: 59.66
+{"Accuracy": 60.338109910174275, "Binary": 77.72793657417067, "Open": 44.9897185648958, "Validity": 96.20645245431277, "Plausibility": 84.61387978676579, "Consistency": 89.82904575407599, "Distribution": 6.29472725262603}
+
+snap/gqa/fb/Epoch20/v3/BEST
+val: 60.3
+{"Accuracy": 60.66904680393211, "Binary": 78.0165519159886, "Open": 45.3580087775834, "Validity": 96.31241746955543, "Plausibility": 84.84374235829218, "Consistency": 89.80977672479997, "Distribution": 6.406721984019992}
+
+snap/gqa/fb/Epoch18/v3/BEST
+val: 60.2
+{"Accuracy": 60.63481195285372, "Binary": 77.88789206481674, "Open": 45.40711413927509, "Validity": 96.29611515951811, "Plausibility": 84.83559120327351, "Consistency": 89.88834815527298, "Distribution": 6.238372598377996}
+
+/data2/yangxu/lxmert/snap/gqa/fsb2/Epoch20/0.000001
+60.95
+
+fsbe18v5： [{"test-dev": {"yes/no": 88.38, "number": 56.15, "other": 63.03, "overall": 72.69}}, {"test-standard": {"yes/no": 88.78, "number": 55.67, "other": 63.32, "overall": 73.04}}]
+
+
+237
+/data2/yangxu/lxmert/snap/gqa/fsb2/Epoch20/0.000003/
+val: 60.72
+
+/data2/yangxu/lxmert/snap/gqa/fsb2/Epoch19/0.000001/
+val: 60.9
+test-dev: 60.84 test-std: 61.17
+
+nlvr2:
+/data2/yangxu/lxmert/snap/nlvr2/fb/Epoch20/0.00003/
+val: 76.18 
+
+/data2/yangxu/lxmert/snap/nlvr2/fb/Epoch18/0.00002/
+val: 76.21 
+
+/data2/yangxu/lxmert/snap/nlvr2/fb/Epoch18/0.00003/
+val: 76.21  test-U: 75.72
+
+lxmert/fblcm1/Epoch20/0.0003
+val: 76.57 
+
+/data2/yangxu/lxmert/snap/nlvr2/fsb2/Epoch19/0.00003/
+val: 76.4 test-P: 76.0
+
+
+
+抽特征：
+coco和nlvr2是在155.69.144.237
+coco：/data2/yangxu/lxmert/data/mscoco_imgfeat/
+nlvr2：
+vg是在172.21.144.212
+vg：/home/yangxu/data/lxmert/data/vg_gqa_imgfeat/
+下数据：
+python util/download_images.py /data2/yangxu/lxmert/data/nlvr2/nlvr/nlvr2/data/dev.json /data2/yangxu/lxmert/data/nlvr2/nlvr/nlvr2/image/dev /data2/yangxu/lxmert/data/nlvr2/nlvr/nlvr2/util/hashes/dev_hashes.json
+
+进入docker：
+coco:
+sudo docker run --gpus all -v /data2/yangxu/lxmert/data/mscoco_imgfeat:/workspace/images:ro -v /data2/yangxu/lxmert/data/mscoco_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+CUDA_VISIBLE_DEVICES=0 python extract_coco_image100.py --split train
+CUDA_VISIBLE_DEVICES=1 python extract_coco_image100.py --split valid
+CUDA_VISIBLE_DEVICES=2 python extract_coco_image100.py --split test
+
+VG：
+rsync -a VG_100K/ VG_100K_2/
+sudo docker run --gpus all -v /home/yangxu/data/lxmert/data/vg_gqa_imgfeat:/workspace/images:ro -v /home/yangxu/data/lxmert/data/vg_gqa_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+
+CUDA_VISIBLE_DEVICES=0 python extract_gqa_image100.py
+把阈值改成0.0重抽了一组叫做vg_gqa_obj1002.tsv
+
+nlvr2:
+sudo docker run --gpus all -v /data2/yangxu/lxmert/data/nlvr2/nlvr/nlvr2/image:/workspace/images:ro -v /data2/yangxu/lxmert/data/nlvr2_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=0 python extract_nlvr2_image.py --split train 
+CUDA_VISIBLE_DEVICES=1 python extract_nlvr2_image.py --split valid
+CUDA_VISIBLE_DEVICES=2 python extract_nlvr2_image.py --split test
+
+
+yangxu@micl-zhanghwws13:/data2/yangxu/lxmert/data/mscoco_imgfeat$ scp -r -P 5102 /data2/yangxu/lxmert/data/mscoco_imgfeat/coco_feat.zip yulei_niu@183.174.228.128:/disks/sdd/yulei_niu/lxmert/
+
+
+yangxu@micl-zhanghwws13:/data2/yangxu/lxmert/data/mscoco_imgfeat$ scp -r -P 5102 /data2/yangxu/lxmert/data/mscoco_imgfeat/coco_feat.zip yulei_niu@183.174.228.128:/disks/sdd/yulei_niu/lxmert/
+
+scp -r -P 5102 /home/yangxu/data/lxmert/data/vg_gqa_imgfeat/vg_gqa_obj100.tsv yulei_niu@183.174.228.128:/disks/sdd/yulei_niu/lxmert/
+psd: mreal123
+
+212上抽64个roi的feature
+docker出现了问题，不能使用gpu，
+问题描述：docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]].
+解决方案：https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html#docker
+coco:
+sudo docker run --gpus all -v /home/yangxu/data/lxmert/data/mscoco_imgfeat:/workspace/images:ro -v /home/yangxu/data/lxmert/data/mscoco_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=0 python extract_coco_image.py --split train
+CUDA_VISIBLE_DEVICES=1 python extract_coco_image.py --split valid
+CUDA_VISIBLE_DEVICES=2 python extract_coco_image.py --split test
+
+nlvr2:
+sudo docker run --gpus all -v /home/yangxu/data/lxmert/data/nlvr2/nlvr/nlvr2/image:/workspace/images:ro -v /home/yangxu/data/lxmert/data/nlvr2_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=0 python extract_nlvr2_image.py --split train 
+CUDA_VISIBLE_DEVICES=1 python extract_nlvr2_image.py --split valid
+CUDA_VISIBLE_DEVICES=2 python extract_nlvr2_image.py --split test
+
+
+245上跑64个roi的vqa
+vqa:
+/data1/yangxu/lxmert/snap/vqa/fsb2/Epoch20/feat_64/0.00001/
+val 71.30
+
+
+41上抽64个roi的vg的特征：
+sudo docker run --gpus all -v /data3/yangxu/lxmert/data/vg_gqa_imgfeat:/workspace/images:ro -v /data3/yangxu/lxmert/data/vg_gqa_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=0 python extract_gqa_image64.py
+
+245上抽nlvr2的特征
+sudo docker run --gpus all -v /data1/yangxu/lxmert/data/nlvr2/nlvr/nlvr2/image:/workspace/images:ro -v /data1/yangxu/lxmert/data/nlvr2_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=0 python extract_nlvr2_image.py --split train 
+CUDA_VISIBLE_DEVICES=1 python extract_nlvr2_image.py --split valid
+CUDA_VISIBLE_DEVICES=2 python extract_nlvr2_image.py --split test
+
+245上抽gqa_testdev
+sudo docker run --gpus all -v /data1/yangxu/lxmert/data/vg_gqa_imgfeat:/workspace/images:ro -v /data1/yangxu/lxmert/data/vg_gqa_imgfeat:/workspace/features --rm -it airsplay/bottom-up-attention bash
+cd /workspace/features
+CUDA_VISIBLE_DEVICES=1 python extract_gqa_image64.py --split testdev
+
+写了一个get_testdev.py文件来生成testdev set,这个set是要从coco的test2015_obj36.tsv中抽取出一共398个特征来测试gqa的性能。
+写了一个get_test.py文件来把coco test中的feature放到vg_gqa_obj64.tsv中去，之前少了这些feature
+
+172.21.149.41:
+nfsb2: 64 roi feature, bs: 160
+bash run/pretrain/nfsb2.bash 0,1,2,3
+
+155.69.144.237:
+nfsb3: 64 roi feature, bs:160, lr 4e-5
+bash run/pretrain/nfsb3.bash 0,1,2,3
+
+172.21.144.212:
+nfsb4: 64 roi feature, bs:160, lr 6e-5
+bash run/pretrain/nfsb4.bash 0,1,2,3
+
+lxmert3
+hfsb1: 100 roi, bs: 256, lr: 5e-5
+! bash run/pretrain/hfsb1.bash 0,1,2,3,4,5,6,7 
+
+lxmert
+hfsb2: 100 roi, bs: 512, lr: 5e-5
+! bash run/pretrain/hfsb2.bash 0,1,2,3,4,5,6,7 
+
+lxmert4
+hfsb1: 100 roi, bs: 512, lr: 1e-4
+! bash run/pretrain/hfsb3.bash 0,1,2,3,4,5,6,7 
+
+lxmert2
+hfsb1: 100 roi, bs: 256, lr: 5e-5, dict: 500
+! bash run/pretrain/hfsb4.bash 0,1,2,3,4,5,6,7 
+
+gqa:
+bash run/gqa/gqa_test_ft.bash 2 nfbs2/Epoch20/0.000003/ --load snap/gqa/nfsb2/Epoch20/0.000003/BEST --test submit --batchSize 256
+val: 61.11 
+172.21.144.212
+bash run/gqa/gqa_test_ft.bash 2 gqa/nfsb3/Epoch20/b64/0.000001/ --load snap/gqa/nfsb3/Epoch20/b64/0.000001/BEST --test submit --batchSize 256
+/home/yangxu/data/lxmert/snap/gqa/gqa/nfsb3/Epoch20/b64/0.000001/submit_predict.json
+dev-set
+{"Accuracy": 61.875378100423475, "Binary": 79.0793897077838, "Open": 46.74852205547976, "Validity": 97.14458560193587, "Plausibility": 85.40834845735027, "Consistency": 90.26398419506478, "Distribution": 1.1364977467358517}
+test-set
+{"Accuracy": 62.071045467142696, "Binary": 79.3553098268308, "Open": 46.815824202805146, "Validity": 96.34828255163757, "Plausibility": 84.70680295397858, "Consistency": 91.02581790410665, "Distribution": 5.730650473879719}
+
+
+vqa:
+172.21.144.212:
+val: 71.82
+/home/yangxu/data/lxmert/snap/vqa/test/nfsb2/Epoch20/0.00007/
+[{"test-dev": {"yes/no": 89.06, "number": 57.33, "other": 63.69, "overall": 73.42}}, {"test-standard": {"yes/no": 89.03, "number": 57.05, "other": 63.91, "overall": 73.58}}]
+
+155.69.144.237
+val: 72.06
+/data2/yangxu/lxmert/snap/vqa/nfsb3/Epoch20/
+bash run/vqa/vqa_test_ft.bash 1 vqa/test/nfsb3/Epoch20/0.00001/ --test test --load snap/vqa/nfsb3/Epoch20/0.00001/BEST
+[{"test-dev": {"yes/no": 88.91, "number": 57.96, "other": 63.93, "overall": 73.54}}, {"test-standard": {"yes/no": 88.82, "number": 57.73, "other": 64.04, "overall": 73.63}}]
+
+
+nlvr2:
+172.21.144.212
+/home/yangxu/data/lxmert/snap/nlvr2/nfsb3/Epoch20/0.00002/
+val: 77.27
+bash run/nlvr2/nlvr2_test_ft.bash 1 test/nlvr2/nfsb3/Epoch20/0.00002/ --load /home/yangxu/data/lxmert/snap/nlvr2/nfsb3/Epoch20/0.00002/BEST --test test --batchSize 128
+0.772355389694273
+
+
