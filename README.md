@@ -1,7 +1,7 @@
 # The Most Important Thing.
-Our code is developed based on:
-LXMERT: Learning Cross-Modality Encoder Representations from Transformers (https://github.com/airsplay/lxmert)
-Here is their readme. I will update ours after a few deadlines.
+## Our code is developed based on:
+## LXMERT: Learning Cross-Modality Encoder Representations from Transformers (https://github.com/airsplay/lxmert)
+## Here is their readme. I will update ours after a few deadlines.
 
 ## Introduction
 PyTorch code for the EMNLP 2019 paper ["LXMERT: Learning Cross-Modality Encoder Representations from Transformers"](https://arxiv.org/abs/1908.07490). Slides of our EMNLP 2019 talk are avialable [here](http://www.cs.unc.edu/~airsplay/EMNLP_2019_LXMERT_slides.pdf). 
