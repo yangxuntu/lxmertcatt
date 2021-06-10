@@ -61,9 +61,8 @@ For experiment settings, like the pytorch version and GPU setting, please refer 
 
 ## This part is ours:
 The pre-training code is:
-    ```bash
-    bash run/fsb2.bash 0,1,2,3 --multiGPU
-    ```
-    > Multiple GPUs: Argument `0,1,2,3` indicates taking 4 GPUs to pre-train LXMERT. If the server does not have 4 GPUs (I am sorry to hear that), please consider halving the batch-size or using the [NVIDIA/apex](https://github.com/NVIDIA/apex) library to support half-precision computation. 
+```bash
+bash run/fsb2.bash 0,1,2,3 --multiGPU
+```
     
     
