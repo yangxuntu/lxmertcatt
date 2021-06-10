@@ -64,5 +64,11 @@ The pre-training code is:
 ```bash
 bash run/fsb2.bash 0,1,2,3 --multiGPU
 ```
-    
+After pre-training, the finetuning codes for VQA, GQA, and NLVE2 are:
+```bash
+bash run/vqa_finetuneft.bash 0 0.00004 0.00004
+bash run/gqa_finetuneft.bash 0 0.000001 0.000001
+bash run/nlvr2_ft.bash 0 0.00003 0.00003
+```
+
     
